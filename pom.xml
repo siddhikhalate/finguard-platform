@@ -24,6 +24,7 @@
         <module>auth-service</module>
         <module>api-gateway</module>
         <module>transaction-service</module>
+        <module>fraud-detection-service</module>
     </modules>
 
     <properties>
