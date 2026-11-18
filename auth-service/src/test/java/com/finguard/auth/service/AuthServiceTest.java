@@ -1,0 +1,164 @@
+package com.finguard.auth.service;
+
+import com.finguard.auth.dto.AuthResponse;
+import com.finguard.auth.dto.LoginRequest;
+import com.finguard.auth.dto.RegisterRequest;
+import com.finguard.auth.entity.RefreshToken;
+import com.finguard.auth.entity.Role;
+import com.finguard.auth.entity.User;
+import com.finguard.auth.exception.AuthException;
+import com.finguard.auth.repository.RefreshTokenRepository;
+import com.finguard.auth.repository.RoleRepository;
+import com.finguard.auth.repository.UserRepository;
+import com.finguard.auth.security.JwtTokenProvider;
+import com.finguard.auth.security.UserPrincipal;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class AuthServiceTest {
+
+    @Mock
+    private AuthenticationManager authenticationManager;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtTokenProvider tokenProvider;
+
+    @InjectMocks
+    private AuthService authService;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(authService, "refreshTokenExpirationMs", 604800000L);
+    }
+
+    @Test
+    @DisplayName("Should successfully authenticate user and return AuthResponse")
+    void shouldLoginSuccessfully() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder()
+                .id(userId)
+                .username("analyst_jane")
+                .email("jane@finguard.internal")
+                .passwordHash("encoded_pwd")
+                .roles(Set.of(Role.builder().id(2).name("ROLE_ANALYST").build()))
+                .build();
+
+        UserPrincipal principal = UserPrincipal.create(user);
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        when(authenticationManager.authenticate(any())).thenReturn(auth);
+        when(tokenProvider.generateAccessToken(any())).thenReturn("mock.jwt.token");
+        when(tokenProvider.getExpirationMs()).thenReturn(86400000L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> {
+            RefreshToken token = invocation.getArgument(0);
+            token.setId(UUID.randomUUID());
+            return token;
+        });
+
+        LoginRequest request = LoginRequest.builder()
+                .username("analyst_jane")
+                .password("Password@123")
+                .build();
+
+        AuthResponse response = authService.login(request);
+
+        assertNotNull(response);
+        assertEquals("mock.jwt.token", response.getAccessToken());
+        assertEquals("analyst_jane", response.getUsername());
+        assertTrue(response.getRoles().contains("ROLE_ANALYST"));
+        verify(refreshTokenRepository).deleteByUser(user);
+    }
+
+    @Test
+    @DisplayName("Should throw AuthException when registering with duplicate username")
+    void shouldFailRegisterWhenUsernameExists() {
+        when(userRepository.existsByUsername("existing_user")).thenReturn(true);
+
+        RegisterRequest request = RegisterRequest.builder()
+                .username("existing_user")
+                .email("new@finguard.internal")
+                .password("Password@123")
+                .build();
+
+        AuthException exception = assertThrows(AuthException.class, () -> authService.register(request));
+        assertEquals("Username is already taken", exception.getMessage());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should register new user successfully with ROLE_USER default")
+    void shouldRegisterNewUserSuccessfully() {
+        UUID userId = UUID.randomUUID();
+        Role userRole = Role.builder().id(3).name("ROLE_USER").build();
+
+        when(userRepository.existsByUsername("new_trader")).thenReturn(false);
+        when(userRepository.existsByEmail("trader@finguard.internal")).thenReturn(false);
+        when(roleRepository.findByName("ROLE_USER")).thenReturn(Optional.of(userRole));
+        when(passwordEncoder.encode("Password@123")).thenReturn("encodedPassword");
+
+        User savedUser = User.builder()
+                .id(userId)
+                .username("new_trader")
+                .email("trader@finguard.internal")
+                .passwordHash("encodedPassword")
+                .roles(Set.of(userRole))
+                .isEnabled(true)
+                .build();
+
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(savedUser));
+        when(tokenProvider.generateAccessToken(any())).thenReturn("token_123");
+        when(tokenProvider.getExpirationMs()).thenReturn(86400000L);
+        when(refreshTokenRepository.save(any())).thenReturn(RefreshToken.builder()
+                .id(UUID.randomUUID())
+                .token("refresh_abc")
+                .expiryDate(Instant.now().plusMillis(604800000))
+                .build());
+
+        RegisterRequest request = RegisterRequest.builder()
+                .username("new_trader")
+                .email("trader@finguard.internal")
+                .password("Password@123")
+                .build();
+
+        AuthResponse response = authService.register(request);
+
+        assertNotNull(response);
+        assertEquals("new_trader", response.getUsername());
+        assertTrue(response.getRoles().contains("ROLE_USER"));
+        verify(userRepository).save(any(User.class));
+    }
+}
