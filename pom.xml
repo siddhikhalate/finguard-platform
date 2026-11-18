@@ -25,6 +25,7 @@
         <module>api-gateway</module>
         <module>transaction-service</module>
         <module>fraud-detection-service</module>
+        <module>incident-service</module>
     </modules>
 
     <properties>
