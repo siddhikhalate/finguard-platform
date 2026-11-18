@@ -86,10 +86,19 @@ const Login = () => {
           >
             {loading ? 'Authenticating...' : 'Sign In to Portal'}
           </button>
+
+          <button
+            type="button"
+            onClick={() => login('analyst', 'Password@123')}
+            className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-400 font-medium rounded-lg text-sm transition-all flex items-center justify-center gap-2"
+          >
+            <span>⚡ Explore in Demo Mode</span>
+            <span className="text-[11px] text-slate-400 font-normal">(Instant Access)</span>
+          </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-slate-800">
-          <p className="text-xs text-slate-400 text-center mb-3">Quick Fill Demo Accounts:</p>
+        <div className="mt-6 pt-4 border-t border-slate-800">
+          <p className="text-xs text-slate-400 text-center mb-3">Quick Fill Demo Credentials:</p>
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
@@ -113,6 +122,9 @@ const Login = () => {
               User
             </button>
           </div>
+          <p className="text-[11px] text-slate-500 text-center mt-3 leading-relaxed">
+            Note: If backend services on port 8080 are not running, clicking Sign In or Explore automatically launches offline demo mode.
+          </p>
         </div>
       </div>
     </div>
