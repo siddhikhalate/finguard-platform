@@ -1,0 +1,42 @@
+server:
+  port: ${AI_EXPLANATION_SERVICE_PORT:8085}
+
+spring:
+  application:
+    name: ai-explanation-service
+
+  ai:
+    openai:
+      api-key: ${SPRING_AI_OPENAI_API_KEY:your_openai_or_groq_api_key_here}
+      base-url: ${SPRING_AI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${SPRING_AI_OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.2
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ai-explanation-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.finguard.common.event,*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.finguard.common.event.FraudIncidentCreatedEvent
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html

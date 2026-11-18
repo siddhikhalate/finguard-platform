@@ -26,6 +26,7 @@
         <module>transaction-service</module>
         <module>fraud-detection-service</module>
         <module>incident-service</module>
+        <module>ai-explanation-service</module>
     </modules>
 
     <properties>
