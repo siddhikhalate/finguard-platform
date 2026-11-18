@@ -1,0 +1,382 @@
+{
+  "info": {
+    "name": "FinGuard - Enterprise Financial Transaction Monitoring API",
+    "_postman_id": "finguard-enterprise-api-collection-v1",
+    "description": "Comprehensive Postman test suite for the FinGuard event-driven microservices platform with Kafka, Redis, and Spring AI.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "last_tx_ref",
+      "value": "TXN-90281-99A",
+      "type": "string"
+    },
+    {
+      "key": "last_incident_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register Analyst User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analyst1@finguard.internal\",\n  \"password\": \"Analyst@Pass123\",\n  \"fullName\": \"Senior Fraud Analyst\",\n  \"role\": \"ANALYST\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/auth/register",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login (Captures JWT Bearer Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('jwt_token', jsonData.accessToken);",
+                  "    console.log('JWT Token successfully set: ' + jsonData.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analyst1@finguard.internal\",\n  \"password\": \"Analyst@Pass123\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/auth/login",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Transactions (Transactional Outbox)",
+      "item": [
+        {
+          "name": "Submit Normal Transaction ($45.50)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountNumber\": \"ACC-1001\",\n  \"targetAccountNumber\": \"ACC-1002\",\n  \"amount\": 45.50,\n  \"currency\": \"USD\",\n  \"merchantCategory\": \"GROCERY\",\n  \"location\": \"New York, USA\",\n  \"channel\": \"POS\",\n  \"idempotencyKey\": \"idemp-grocery-{{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/transactions",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "transactions"]
+            }
+          }
+        },
+        {
+          "name": "Submit High-Value Fraud Scenario ($25,000.00)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.transactionReference) {",
+                  "    pm.collectionVariables.set('last_tx_ref', jsonData.transactionReference);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountNumber\": \"ACC-1001\",\n  \"targetAccountNumber\": \"ACC-9921\",\n  \"amount\": 25000.00,\n  \"currency\": \"USD\",\n  \"merchantCategory\": \"LUXURY_GOODS\",\n  \"location\": \"Dubai, UAE\",\n  \"channel\": \"ONLINE\",\n  \"idempotencyKey\": \"idemp-highval-{{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/transactions",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "transactions"]
+            }
+          }
+        },
+        {
+          "name": "Get All Transactions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/transactions?page=0&size=20",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "transactions"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Accounts Balance List",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/transactions/accounts",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "transactions", "accounts"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Fraud Detection Engine",
+      "item": [
+        {
+          "name": "Get Fraud Risk Assessments",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/fraud/assessments?size=20",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "fraud", "assessments"],
+              "query": [
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Configured Fraud Rules",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/fraud/rules",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "fraud", "rules"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Incident Investigation Workbench",
+      "item": [
+        {
+          "name": "Get Incident Queue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.content && jsonData.content.length > 0) {",
+                  "    pm.collectionVariables.set('last_incident_id', jsonData.content[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/incidents?page=0&size=10",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "incidents"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Transition Incident Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"UNDER_INVESTIGATION\",\n  \"analystNotes\": \"Investigating foreign login and sudden high transaction amount burst.\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/incidents/{{last_incident_id}}/status",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "incidents", "{{last_incident_id}}", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Spring AI Cognitive Explanations",
+      "item": [
+        {
+          "name": "Generate Multi-Modal AI Explanation",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"tx-sample-01\",\n  \"transactionReference\": \"{{last_tx_ref}}\",\n  \"accountNumber\": \"ACC-1001\",\n  \"amount\": 25000.00,\n  \"currency\": \"USD\",\n  \"riskScore\": 85,\n  \"riskLevel\": \"CRITICAL\",\n  \"location\": \"Dubai, UAE\",\n  \"triggeredRules\": [\n    {\n      \"ruleType\": \"HIGH_AMOUNT\",\n      \"ruleName\": \"High Transaction Amount Threshold\",\n      \"scoreWeight\": 25,\n      \"description\": \"Amount $25,000 exceeds standard limit $10,000\"\n    },\n    {\n      \"ruleType\": \"UNUSUAL_LOCATION\",\n      \"ruleName\": \"Geographic Anomaly\",\n      \"scoreWeight\": 20,\n      \"description\": \"Dubai differs from customer primary baseline\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/ai/explain",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "ai", "explain"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
