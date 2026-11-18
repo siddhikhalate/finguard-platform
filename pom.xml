@@ -23,6 +23,7 @@
         <module>common-dto</module>
         <module>auth-service</module>
         <module>api-gateway</module>
+        <module>transaction-service</module>
     </modules>
 
     <properties>
