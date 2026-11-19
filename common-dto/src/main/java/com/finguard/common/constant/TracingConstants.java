@@ -14,4 +14,5 @@ public final class TracingConstants {
     public static final String USERNAME_HEADER = "X-Username";
     public static final String USER_ROLES_HEADER = "X-User-Roles";
     public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    public static final String INTERNAL_GATEWAY_KEY_HEADER = "X-Internal-Gateway-Key";
 }
