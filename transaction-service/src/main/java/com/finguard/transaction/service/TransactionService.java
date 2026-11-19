@@ -10,6 +10,7 @@ import com.finguard.transaction.dto.TransactionResponse;
 import com.finguard.transaction.entity.Account;
 import com.finguard.transaction.entity.OutboxEvent;
 import com.finguard.transaction.entity.Transaction;
+import com.finguard.transaction.exception.AccessDeniedException;
 import com.finguard.transaction.exception.ResourceNotFoundException;
 import com.finguard.transaction.repository.AccountRepository;
 import com.finguard.transaction.repository.OutboxEventRepository;
@@ -39,10 +40,17 @@ public class TransactionService {
     private final ObjectMapper objectMapper;
 
     @Transactional
+    public TransactionResponse processTransaction(TransactionRequest request, String idempotencyKeyHeader, String correlationId) {
+        return processTransaction(request, idempotencyKeyHeader, correlationId, null, "ROLE_ADMIN");
+    }
+
+    @Transactional
     public TransactionResponse processTransaction(
             TransactionRequest request,
             String idempotencyKeyHeader,
-            String correlationId) {
+            String correlationId,
+            String userIdHeader,
+            String rolesHeader) {
 
         String idempotencyKey = StringUtils.hasText(idempotencyKeyHeader)
                 ? idempotencyKeyHeader
@@ -55,9 +63,11 @@ public class TransactionService {
             return mapToResponse(existingTxn.get(), existingTxn.get().getAccount().getBalance());
         }
 
-        // 2. Account Validation
+        // 2. Account Validation & Object-Level Access Control Check
         Account account = accountRepository.findById(request.getAccountId())
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + request.getAccountId()));
+
+        enforceAccountOwnership(account, userIdHeader, rolesHeader, "transact on");
 
         // 3. Balance Evaluation & Transaction Status Determination
         TransactionStatus status;
@@ -128,46 +138,104 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public TransactionResponse getTransactionById(UUID id) {
+        return getTransactionById(id, null, "ROLE_ADMIN");
+    }
+
+    @Transactional(readOnly = true)
+    public TransactionResponse getTransactionById(UUID id, String userIdHeader, String rolesHeader) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with ID: " + id));
 
+        enforceAccountOwnership(transaction.getAccount(), userIdHeader, rolesHeader, "view");
         return mapToResponse(transaction, transaction.getAccount().getBalance());
     }
 
     @Transactional(readOnly = true)
     public Page<TransactionResponse> getTransactionsByAccount(UUID accountId, Pageable pageable) {
+        return getTransactionsByAccount(accountId, pageable, null, "ROLE_ADMIN");
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TransactionResponse> getTransactionsByAccount(UUID accountId, Pageable pageable, String userIdHeader, String rolesHeader) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
+
+        enforceAccountOwnership(account, userIdHeader, rolesHeader, "view transactions for");
+
         return transactionRepository.findByAccountIdOrderByCreatedAtDesc(accountId, pageable)
                 .map(txn -> mapToResponse(txn, txn.getAccount().getBalance()));
     }
 
     @Transactional(readOnly = true)
     public List<AccountDto> getAllAccounts() {
-        return accountRepository.findAll().stream()
-                .map(acc -> AccountDto.builder()
-                        .id(acc.getId())
-                        .accountNumber(acc.getAccountNumber())
-                        .cardholderName(acc.getCardholderName())
-                        .balance(acc.getBalance())
-                        .currency(acc.getCurrency())
-                        .status(acc.getStatus())
-                        .createdAt(acc.getCreatedAt())
-                        .build())
+        return getAllAccounts(null, "ROLE_ADMIN");
+    }
+
+    @Transactional(readOnly = true)
+    public List<AccountDto> getAllAccounts(String userIdHeader, String rolesHeader) {
+        List<Account> accounts;
+        if (isStaff(rolesHeader)) {
+            accounts = accountRepository.findAll();
+        } else if (StringUtils.hasText(userIdHeader)) {
+            try {
+                UUID uid = UUID.fromString(userIdHeader.trim());
+                accounts = accountRepository.findByUserId(uid);
+            } catch (IllegalArgumentException e) {
+                accounts = List.of();
+            }
+        } else {
+            accounts = List.of();
+        }
+
+        return accounts.stream()
+                .map(this::mapToAccountDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public AccountDto getAccountById(UUID accountId) {
+        return getAccountById(accountId, null, "ROLE_ADMIN");
+    }
+
+    @Transactional(readOnly = true)
+    public AccountDto getAccountById(UUID accountId, String userIdHeader, String rolesHeader) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
 
+        enforceAccountOwnership(account, userIdHeader, rolesHeader, "view");
+        return mapToAccountDto(account);
+    }
+
+    private boolean isStaff(String rolesHeader) {
+        if (!StringUtils.hasText(rolesHeader)) {
+            return false;
+        }
+        return rolesHeader.contains("ROLE_ADMIN") || rolesHeader.contains("ROLE_ANALYST");
+    }
+
+    private void enforceAccountOwnership(Account account, String userIdHeader, String rolesHeader, String action) {
+        if (isStaff(rolesHeader)) {
+            return; // Staff (ANALYST / ADMIN) has broad audit access across all accounts
+        }
+
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new AccessDeniedException("Access denied: User identity header missing");
+        }
+
+        if (account.getUserId() == null || !account.getUserId().toString().equalsIgnoreCase(userIdHeader.trim())) {
+            throw new AccessDeniedException("Access denied: You do not have permission to " + action + " account " + account.getAccountNumber());
+        }
+    }
+
+    private AccountDto mapToAccountDto(Account acc) {
         return AccountDto.builder()
-                .id(account.getId())
-                .accountNumber(account.getAccountNumber())
-                .cardholderName(account.getCardholderName())
-                .balance(account.getBalance())
-                .currency(account.getCurrency())
-                .status(account.getStatus())
-                .createdAt(account.getCreatedAt())
+                .id(acc.getId())
+                .accountNumber(acc.getAccountNumber())
+                .cardholderName(acc.getCardholderName())
+                .balance(acc.getBalance())
+                .currency(acc.getCurrency())
+                .status(acc.getStatus())
+                .createdAt(acc.getCreatedAt())
                 .build();
     }
 

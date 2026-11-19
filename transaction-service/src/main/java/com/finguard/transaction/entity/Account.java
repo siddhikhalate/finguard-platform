@@ -32,6 +32,9 @@ public class Account {
     @Column(name = "account_number", nullable = false, unique = true, length = 50)
     private String accountNumber;
 
+    @Column(name = "user_id")
+    private UUID userId;
+
     @Column(name = "cardholder_name", nullable = false, length = 100)
     private String cardholderName;
 

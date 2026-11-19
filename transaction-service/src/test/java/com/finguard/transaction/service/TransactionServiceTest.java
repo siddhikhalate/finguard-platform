@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -191,5 +192,79 @@ class TransactionServiceTest {
 
         assertThrows(ResourceNotFoundException.class, () ->
                 transactionService.processTransaction(request, "idemp-4", "corr-4"));
+    }
+
+    @Test
+    @DisplayName("Should throw AccessDeniedException when USER role attempts to transact on another user's account")
+    void shouldDenyUserTransactingOnAnotherAccount() {
+        UUID ownerId = UUID.randomUUID();
+        UUID attackerUserId = UUID.randomUUID();
+        account.setUserId(ownerId);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+
+        TransactionRequest request = TransactionRequest.builder()
+                .accountId(accountId)
+                .sourceAccount("ACC-100201")
+                .targetAccount("ACC-999")
+                .amount(new BigDecimal("100.00"))
+                .currency("USD")
+                .channel("ONLINE_TRANSFER")
+                .location("London, UK")
+                .build();
+
+        assertThrows(com.finguard.transaction.exception.AccessDeniedException.class, () ->
+                transactionService.processTransaction(request, "idemp-olac-1", "corr-olac-1", attackerUserId.toString(), "ROLE_USER"));
+
+        verify(transactionRepository, never()).save(any());
+        verify(outboxEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should allow ANALYST or ADMIN staff to access any account regardless of owner")
+    void shouldAllowStaffToTransactOnAnyAccount() {
+        UUID ownerId = UUID.randomUUID();
+        UUID analystUserId = UUID.randomUUID();
+        account.setUserId(ownerId);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> {
+            Transaction t = invocation.getArgument(0);
+            t.setId(UUID.randomUUID());
+            t.setCreatedAt(Instant.now());
+            return t;
+        });
+
+        TransactionRequest request = TransactionRequest.builder()
+                .accountId(accountId)
+                .sourceAccount("ACC-100201")
+                .targetAccount("ACC-999")
+                .amount(new BigDecimal("100.00"))
+                .currency("USD")
+                .channel("ONLINE_TRANSFER")
+                .location("London, UK")
+                .build();
+
+        TransactionResponse response = transactionService.processTransaction(
+                request, "idemp-olac-2", "corr-olac-2", analystUserId.toString(), "ROLE_ANALYST");
+
+        assertNotNull(response);
+        verify(transactionRepository).save(any(Transaction.class));
+    }
+
+    @Test
+    @DisplayName("Should filter accounts by userId when caller has ROLE_USER")
+    void shouldFilterAccountsByUserIdForRegularUser() {
+        UUID userId = UUID.randomUUID();
+        account.setUserId(userId);
+
+        when(accountRepository.findByUserId(userId)).thenReturn(List.of(account));
+
+        var accounts = transactionService.getAllAccounts(userId.toString(), "ROLE_USER");
+
+        assertEquals(1, accounts.size());
+        assertEquals("ACC-100201", accounts.get(0).getAccountNumber());
+        verify(accountRepository).findByUserId(userId);
+        verify(accountRepository, never()).findAll();
     }
 }
