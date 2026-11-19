@@ -21,28 +21,28 @@ FinGuard is a production-grade, event-driven financial transaction monitoring an
 flowchart TD
     Client["Client / React Operations Dashboard"] -->|HTTPS / REST| Gateway["API Gateway (Port 8080)<br/>Spring Cloud Gateway + Netty"]
     
-    subgraph Security & Routing
-        Gateway -->|JWT Validation & Routing| AuthSvc["Auth Service (Port 8081)<br/>JJWT + BCrypt + Roles"]
+    subgraph SecurityRouting ["Security and Routing Tier"]
+        Gateway -->|JWT Validation and Routing| AuthSvc["Auth Service (Port 8081)<br/>JJWT + BCrypt + Roles"]
         Gateway -->|Route /api/transactions| TxSvc["Transaction Service (Port 8082)<br/>Transactional Outbox"]
         Gateway -->|Route /api/fraud| FraudSvc["Fraud Detection Service (Port 8083)<br/>Rules Engine + Redis"]
         Gateway -->|Route /api/incidents| IncSvc["Incident Service (Port 8084)<br/>Triage & Audit Trail"]
         Gateway -->|Route /api/ai| AiSvc["AI Explanation Service (Port 8085)<br/>Spring AI + Fallback"]
     end
 
-    subgraph Storage & Caching
-        AuthSvc --> AuthDB[(Postgres: finguard_auth)]
-        TxSvc --> TxDB[(Postgres: finguard_transactions)]
-        FraudSvc --> FraudDB[(Postgres: finguard_fraud)]
-        FraudSvc --> RedisCache[(Redis 7.2:<br/>Rules & Sliding Window)]
-        IncSvc --> IncDB[(Postgres: finguard_incidents)]
-        AiSvc --> AiDB[(Postgres: finguard_ai)]
+    subgraph StorageCaching ["Storage and Caching Tier"]
+        AuthSvc --> AuthDB[("Postgres: finguard_auth")]
+        TxSvc --> TxDB[("Postgres: finguard_transactions")]
+        FraudSvc --> FraudDB[("Postgres: finguard_fraud")]
+        FraudSvc --> RedisCache[("Redis 7.2: Rules and Sliding Window")]
+        IncSvc --> IncDB[("Postgres: finguard_incidents")]
+        AiSvc --> AiDB[("Postgres: finguard_ai")]
     end
 
-    subgraph Kafka Event Bus (KRaft Mode)
-        TxSvc -.->|finguard.transaction-created| Kafka[Apache Kafka Broker]
+    subgraph KafkaEventBus ["Kafka Event Bus - KRaft Mode"]
+        TxSvc -.->|finguard.transaction-created| Kafka["Apache Kafka Broker"]
         Kafka -.->|Consume Event| FraudSvc
         FraudSvc -.->|finguard.fraud-risk-assessed| Kafka
-        Kafka -.->|Score >= 50| IncSvc
+        Kafka -.->|High Risk Score| IncSvc
         IncSvc -.->|finguard.fraud-incident-created| Kafka
         Kafka -.->|Synthesize Context| AiSvc
     end
