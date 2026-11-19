@@ -8,8 +8,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Set;
-
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,5 +28,4 @@ public class RegisterRequest {
 
     private String firstName;
     private String lastName;
-    private Set<String> roles;
 }

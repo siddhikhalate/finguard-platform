@@ -91,19 +91,10 @@ public class AuthService {
             throw new AuthException("Email is already registered");
         }
 
-        Set<Role> roles = new HashSet<>();
-        if (registerRequest.getRoles() == null || registerRequest.getRoles().isEmpty()) {
-            Role userRole = roleRepository.findByName("ROLE_USER")
-                    .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "ROLE_USER"));
-            roles.add(userRole);
-        } else {
-            for (String roleName : registerRequest.getRoles()) {
-                String normalizedRole = roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
-                Role role = roleRepository.findByName(normalizedRole)
-                        .orElseThrow(() -> new ResourceNotFoundException("Role", "name", normalizedRole));
-                roles.add(role);
-            }
-        }
+        // Privilege Escalation Prevention: Self-registration strictly assigns ROLE_USER
+        Role userRole = roleRepository.findByName("ROLE_USER")
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "ROLE_USER"));
+        Set<Role> roles = Set.of(userRole);
 
         User user = User.builder()
                 .username(registerRequest.getUsername().trim().toLowerCase())
@@ -205,5 +196,40 @@ public class AuthService {
         }
 
         return token;
+    }
+
+    @Transactional
+    public AuthResponse updateUserRoles(UUID userId, Set<String> roleNames) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        if (roleNames == null || roleNames.isEmpty()) {
+            throw new AuthException("At least one role must be specified");
+        }
+
+        Set<Role> roles = new HashSet<>();
+        for (String roleName : roleNames) {
+            String normalizedRole = roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+            Role role = roleRepository.findByName(normalizedRole)
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", "name", normalizedRole));
+            roles.add(role);
+        }
+
+        user.setRoles(roles);
+        User updatedUser = userRepository.save(user);
+        log.info("Admin updated roles for user {}: {}", updatedUser.getUsername(), roleNames);
+
+        UserPrincipal principal = UserPrincipal.create(updatedUser);
+        String accessToken = tokenProvider.generateAccessToken(principal);
+
+        return AuthResponse.builder()
+                .userId(updatedUser.getId())
+                .username(updatedUser.getUsername())
+                .email(updatedUser.getEmail())
+                .roles(roles.stream().map(Role::getName).collect(Collectors.toSet()))
+                .accessToken(accessToken)
+                .tokenType("Bearer")
+                .expiresIn(tokenProvider.getExpirationMs() / 1000)
+                .build();
     }
 }

@@ -5,6 +5,7 @@ import com.finguard.auth.dto.LoginRequest;
 import com.finguard.auth.dto.RegisterRequest;
 import com.finguard.auth.dto.TokenRefreshRequest;
 import com.finguard.auth.dto.TokenRefreshResponse;
+import com.finguard.auth.dto.UpdateRolesRequest;
 import com.finguard.auth.dto.UserSummaryDto;
 import com.finguard.auth.security.JwtTokenProvider;
 import com.finguard.auth.security.UserPrincipal;
@@ -20,13 +21,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -86,5 +90,15 @@ public class AuthController {
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.ok("Token is invalid or missing", Map.of("valid", false)));
+    }
+
+    @PutMapping("/users/{id}/roles")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Update user roles", description = "Admin-only endpoint to modify assigned user roles")
+    public ResponseEntity<ApiResponse<AuthResponse>> updateUserRoles(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody UpdateRolesRequest request) {
+        AuthResponse response = authService.updateUserRoles(id, request.getRoles());
+        return ResponseEntity.ok(ApiResponse.ok("User roles updated successfully", response));
     }
 }

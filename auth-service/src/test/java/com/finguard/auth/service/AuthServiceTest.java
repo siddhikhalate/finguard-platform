@@ -161,4 +161,47 @@ class AuthServiceTest {
         assertTrue(response.getRoles().contains("ROLE_USER"));
         verify(userRepository).save(any(User.class));
     }
+
+    @Test
+    @DisplayName("Should successfully update user roles when called by admin")
+    void shouldUpdateUserRolesSuccessfully() {
+        UUID userId = UUID.randomUUID();
+        User existingUser = User.builder()
+                .id(userId)
+                .username("trader_bob")
+                .email("bob@finguard.internal")
+                .roles(Set.of(Role.builder().id(3).name("ROLE_USER").build()))
+                .isEnabled(true)
+                .build();
+
+        Role analystRole = Role.builder().id(2).name("ROLE_ANALYST").build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
+        when(roleRepository.findByName("ROLE_ANALYST")).thenReturn(Optional.of(analystRole));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tokenProvider.generateAccessToken(any())).thenReturn("new.admin.granted.token");
+
+        AuthResponse response = authService.updateUserRoles(userId, Set.of("ANALYST"));
+
+        assertNotNull(response);
+        assertEquals(userId, response.getUserId());
+        assertTrue(response.getRoles().contains("ROLE_ANALYST"));
+        verify(userRepository).save(existingUser);
+    }
+
+    @Test
+    @DisplayName("Should fail updating user roles when role set is empty")
+    void shouldFailUpdatingUserRolesWhenRolesEmpty() {
+        UUID userId = UUID.randomUUID();
+        User existingUser = User.builder()
+                .id(userId)
+                .username("trader_bob")
+                .email("bob@finguard.internal")
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
+
+        assertThrows(AuthException.class, () -> authService.updateUserRoles(userId, Set.of()));
+        verify(userRepository, never()).save(any());
+    }
 }
