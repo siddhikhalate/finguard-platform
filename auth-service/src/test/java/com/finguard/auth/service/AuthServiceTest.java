@@ -78,6 +78,7 @@ class AuthServiceTest {
         UserPrincipal principal = UserPrincipal.create(user);
         Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
+        when(userRepository.findByUsername("analyst_jane")).thenReturn(Optional.of(user));
         when(authenticationManager.authenticate(any())).thenReturn(auth);
         when(tokenProvider.generateAccessToken(any())).thenReturn("mock.jwt.token");
         when(tokenProvider.getExpirationMs()).thenReturn(86400000L);
@@ -100,6 +101,70 @@ class AuthServiceTest {
         assertEquals("analyst_jane", response.getUsername());
         assertTrue(response.getRoles().contains("ROLE_ANALYST"));
         verify(refreshTokenRepository).deleteByUser(user);
+    }
+
+    @Test
+    @DisplayName("Should lock account for 15 minutes after 5 consecutive failed login attempts")
+    void shouldLockAccountAfter5FailedAttempts() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder()
+                .id(userId)
+                .username("target_user")
+                .failedLoginAttempts(4)
+                .build();
+
+        when(userRepository.findByUsername("target_user")).thenReturn(Optional.of(user));
+        when(authenticationManager.authenticate(any()))
+                .thenThrow(new org.springframework.security.authentication.BadCredentialsException("Bad credentials"));
+
+        LoginRequest request = LoginRequest.builder()
+                .username("target_user")
+                .password("WrongPassword")
+                .build();
+
+        // 5th failed attempt should trigger lockout
+        assertThrows(AuthException.class, () -> authService.login(request));
+        assertEquals(5, user.getFailedLoginAttempts());
+        assertNotNull(user.getLockedUntil());
+        assertTrue(user.getLockedUntil().isAfter(Instant.now()));
+
+        // Subsequent attempt while locked should be immediately rejected without hitting AuthenticationManager
+        AuthException lockException = assertThrows(AuthException.class, () -> authService.login(request));
+        assertTrue(lockException.getMessage().contains("Account is temporarily locked"));
+    }
+
+    @Test
+    @DisplayName("Should hash refresh token with SHA-256 before saving to database")
+    void shouldHashRefreshTokenInDatabase() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder()
+                .id(userId)
+                .username("secure_user")
+                .build();
+
+        UserPrincipal principal = UserPrincipal.create(user);
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        when(userRepository.findByUsername("secure_user")).thenReturn(Optional.of(user));
+        when(authenticationManager.authenticate(any())).thenReturn(auth);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(tokenProvider.generateAccessToken(any())).thenReturn("access.token");
+        when(tokenProvider.getExpirationMs()).thenReturn(3600000L);
+
+        org.mockito.ArgumentCaptor<RefreshToken> captor = org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        when(refreshTokenRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        LoginRequest request = LoginRequest.builder()
+                .username("secure_user")
+                .password("ValidPassword")
+                .build();
+
+        authService.login(request);
+
+        RefreshToken savedToken = captor.getValue();
+        assertNotNull(savedToken.getTokenHash());
+        assertEquals(64, savedToken.getTokenHash().length());
+        assertEquals(AuthService.hashToken(savedToken.getToken()), savedToken.getTokenHash());
     }
 
     @Test

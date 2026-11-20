@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -29,8 +30,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,6 +45,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    public static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
+    public static final int LOCKOUT_DURATION_MINUTES = 15;
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
@@ -52,18 +61,66 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginRequest.getUsername(),
-                        loginRequest.getPassword()
-                )
-        );
+        String username = loginRequest.getUsername().trim().toLowerCase();
+        Optional<User> userOpt = userRepository.findByUsername(username);
+
+        // 1. Check account lockout state
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (user.getLockedUntil() != null) {
+                if (user.getLockedUntil().isAfter(Instant.now())) {
+                    long minutesLeft = Duration.between(Instant.now(), user.getLockedUntil()).toMinutes() + 1;
+                    log.warn("Login attempt for locked account {}: {} minutes remaining", username, minutesLeft);
+                    throw new AuthException("Account is temporarily locked due to multiple failed login attempts. Try again in " + minutesLeft + " minutes.");
+                } else {
+                    // Lockout expired; reset lock
+                    user.setLockedUntil(null);
+                    user.setFailedLoginAttempts(0);
+                    userRepository.save(user);
+                }
+            }
+        }
+
+        // 2. Perform authentication with lockout counter increment on failure
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            username,
+                            loginRequest.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException ex) {
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                int attempts = user.getFailedLoginAttempts() + 1;
+                user.setFailedLoginAttempts(attempts);
+                if (attempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
+                    user.setLockedUntil(Instant.now().plus(Duration.ofMinutes(LOCKOUT_DURATION_MINUTES)));
+                    log.warn("Account {} locked for {} minutes after {} failed login attempts",
+                            username, LOCKOUT_DURATION_MINUTES, attempts);
+                }
+                userRepository.save(user);
+            }
+            throw new AuthException("Invalid username or password");
+        }
+
+        // 3. Reset failed login attempts on successful authentication
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (user.getFailedLoginAttempts() > 0 || user.getLockedUntil() != null) {
+                user.setFailedLoginAttempts(0);
+                user.setLockedUntil(null);
+                userRepository.save(user);
+            }
+        }
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
 
         String accessToken = tokenProvider.generateAccessToken(userPrincipal);
-        RefreshToken refreshToken = createRefreshToken(userPrincipal.getId());
+        String rawRefreshToken = UUID.randomUUID().toString();
+        createRefreshToken(userPrincipal.getId(), rawRefreshToken);
 
         Set<String> roles = userPrincipal.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -71,7 +128,7 @@ public class AuthService {
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
+                .refreshToken(rawRefreshToken)
                 .tokenType("Bearer")
                 .expiresIn(tokenProvider.getExpirationMs() / 1000)
                 .userId(userPrincipal.getId())
@@ -103,6 +160,7 @@ public class AuthService {
                 .firstName(registerRequest.getFirstName())
                 .lastName(registerRequest.getLastName())
                 .isEnabled(true)
+                .failedLoginAttempts(0)
                 .roles(roles)
                 .build();
 
@@ -111,13 +169,14 @@ public class AuthService {
 
         UserPrincipal principal = UserPrincipal.create(savedUser);
         String accessToken = tokenProvider.generateAccessToken(principal);
-        RefreshToken refreshToken = createRefreshToken(savedUser.getId());
+        String rawRefreshToken = UUID.randomUUID().toString();
+        createRefreshToken(savedUser.getId(), rawRefreshToken);
 
         Set<String> roleNames = roles.stream().map(Role::getName).collect(Collectors.toSet());
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
+                .refreshToken(rawRefreshToken)
                 .tokenType("Bearer")
                 .expiresIn(tokenProvider.getExpirationMs() / 1000)
                 .userId(savedUser.getId())
@@ -130,8 +189,11 @@ public class AuthService {
     @Transactional
     public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
+        String tokenHash = hashToken(requestRefreshToken);
 
-        return refreshTokenRepository.findByToken(requestRefreshToken)
+        // Verify token against database hash lookup (with fallback to plaintext token for backwards compatibility)
+        return refreshTokenRepository.findByTokenHash(tokenHash)
+                .or(() -> refreshTokenRepository.findByToken(requestRefreshToken))
                 .map(this::verifyExpiration)
                 .map(RefreshToken::getUser)
                 .map(user -> {
@@ -168,16 +230,19 @@ public class AuthService {
                 .build();
     }
 
-    private RefreshToken createRefreshToken(UUID userId) {
+    private RefreshToken createRefreshToken(UUID userId, String rawToken) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
         // Delete existing refresh tokens for the user to maintain single active session per device
         refreshTokenRepository.deleteByUser(user);
 
+        String tokenHash = hashToken(rawToken);
+
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)
-                .token(UUID.randomUUID().toString())
+                .token(rawToken)
+                .tokenHash(tokenHash)
                 .expiryDate(Instant.now().plusMillis(refreshTokenExpirationMs))
                 .revoked(false)
                 .build();
@@ -231,5 +296,24 @@ public class AuthService {
                 .tokenType("Bearer")
                 .expiresIn(tokenProvider.getExpirationMs() / 1000)
                 .build();
+    }
+
+    public static String hashToken(String rawToken) {
+        if (rawToken == null) {
+            return null;
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm unavailable", e);
+        }
     }
 }

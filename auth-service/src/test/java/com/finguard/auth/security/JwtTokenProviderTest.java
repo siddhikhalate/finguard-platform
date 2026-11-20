@@ -48,4 +48,12 @@ class JwtTokenProviderTest {
         String invalidToken = "eyJhbGciOiJIUzI1NiJ9.invalidPayload.signature";
         assertFalse(jwtTokenProvider.validateToken(invalidToken));
     }
+
+    @Test
+    @DisplayName("Should throw IllegalArgumentException during startup if secret is missing or shorter than 32 bytes")
+    void shouldFailStartupIfSecretTooShortOrMissing() {
+        assertThrows(IllegalArgumentException.class, () -> new JwtTokenProvider(null, expirationMs));
+        assertThrows(IllegalArgumentException.class, () -> new JwtTokenProvider("", expirationMs));
+        assertThrows(IllegalArgumentException.class, () -> new JwtTokenProvider("short-secret-under-32-bytes", expirationMs));
+    }
 }

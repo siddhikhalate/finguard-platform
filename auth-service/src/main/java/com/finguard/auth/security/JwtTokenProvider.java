@@ -26,8 +26,11 @@ public class JwtTokenProvider {
     private final long accessTokenExpirationMs;
 
     public JwtTokenProvider(
-            @Value("${finguard.security.jwt.secret}") String secret,
+            @Value("${finguard.security.jwt.secret:}") String secret,
             @Value("${finguard.security.jwt.access-token-expiration-ms:86400000}") long accessTokenExpirationMs) {
+        if (secret == null || secret.trim().isEmpty() || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalArgumentException("FATAL: JWT_SECRET must be configured and at least 32 bytes (256 bits) for HMAC-SHA256 security");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenExpirationMs = accessTokenExpirationMs;
     }

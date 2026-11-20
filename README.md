@@ -228,9 +228,12 @@ npm run dev
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-**Default Quick-Login Credentials:**
-- **Analyst:** `analyst1@finguard.internal` / `Analyst@Pass123`
-- **Admin:** `admin@finguard.internal` / `Admin@Pass123`
+**Development Quick-Login Credentials (`dev` profile):**
+- **Admin:** `dev_admin` / `DevAdmin@123`
+- **Analyst:** `dev_analyst` / `DevAnalyst@123`
+- **Standard User:** `dev_user` / `DevUser@123`
+
+> In production, default seed accounts are completely removed; all new accounts register via `/api/v1/auth/register` (defaulting strictly to `ROLE_USER`) with role elevation managed exclusively by authorized administrators.
 
 ---
 
