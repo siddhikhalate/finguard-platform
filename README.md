@@ -170,10 +170,9 @@ Each microservice maintains its own dedicated PostgreSQL database with Flyway ve
 
 ### 1. Clone & Prepare Environment
 ```bash
-git clone https://github.com/your-username/finguard-platform.git
+git clone https://github.com/siddhikhalate/finguard-platform.git
 cd finguard-platform
-cp .env.example .env
-```
+copy .env.example .env```
 
 ### 2. Start Infrastructure Containers
 Start PostgreSQL 16, Redis 7.2, Apache Kafka (KRaft mode), and Kafka UI:
