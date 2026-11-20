@@ -190,7 +190,7 @@ Execute the reactor test suite across all 8 modules:
 # On Linux/macOS:
 ./mvnw test
 ```
-*Result: 24/24 automated unit and integration tests execute successfully.*
+*Result: mvn test automated unit and integration tests execute successfully.*
 
 ### 4. Run Backend Services
 You can run services individually from your IDE or via terminal:
