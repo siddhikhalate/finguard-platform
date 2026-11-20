@@ -24,6 +24,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final InternalGatewayAuthFilter internalGatewayAuthFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -57,6 +58,7 @@ public class SecurityConfig {
             );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(internalGatewayAuthFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

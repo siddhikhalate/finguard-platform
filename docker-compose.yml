@@ -102,14 +102,15 @@ services:
       dockerfile: Dockerfile
     container_name: finguard-auth-service
     restart: unless-stopped
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finguard_auth
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finguard}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finguard_secret}
       JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      INTERNAL_GATEWAY_KEY: ${INTERNAL_GATEWAY_KEY:-finguard-internal-secret-gateway-key-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,6 +129,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      INTERNAL_GATEWAY_KEY: ${INTERNAL_GATEWAY_KEY:-finguard-internal-secret-gateway-key-change-in-prod}
     depends_on:
       - auth-service
     networks:
@@ -140,14 +142,15 @@ services:
       dockerfile: Dockerfile
     container_name: finguard-transaction-service
     restart: unless-stopped
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finguard_transactions
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finguard}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finguard_secret}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INTERNAL_GATEWAY_KEY: ${INTERNAL_GATEWAY_KEY:-finguard-internal-secret-gateway-key-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -163,8 +166,8 @@ services:
       dockerfile: Dockerfile
     container_name: finguard-fraud-detection-service
     restart: unless-stopped
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finguard_fraud
@@ -173,6 +176,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INTERNAL_GATEWAY_KEY: ${INTERNAL_GATEWAY_KEY:-finguard-internal-secret-gateway-key-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -190,14 +194,15 @@ services:
       dockerfile: Dockerfile
     container_name: finguard-incident-service
     restart: unless-stopped
-    ports:
-      - "8084:8084"
+    expose:
+      - "8084"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finguard_incidents
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finguard}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finguard_secret}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INTERNAL_GATEWAY_KEY: ${INTERNAL_GATEWAY_KEY:-finguard-internal-secret-gateway-key-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -213,8 +218,8 @@ services:
       dockerfile: Dockerfile
     container_name: finguard-ai-explanation-service
     restart: unless-stopped
-    ports:
-      - "8085:8085"
+    expose:
+      - "8085"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finguard_ai
@@ -222,6 +227,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finguard_secret}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       OPENAI_API_KEY: ${OPENAI_API_KEY:-demo-key}
+      INTERNAL_GATEWAY_KEY: ${INTERNAL_GATEWAY_KEY:-finguard-internal-secret-gateway-key-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy

@@ -45,6 +45,8 @@ spring:
         spring.json.add.type.headers: false
 
 finguard:
+  security:
+    internal-key: ${INTERNAL_GATEWAY_KEY:finguard-internal-secret-gateway-key-change-in-prod}
   outbox:
     polling-rate-ms: 1000
     batch-size: 50
