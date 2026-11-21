@@ -46,9 +46,9 @@
               "raw": "{\n  \"email\": \"analyst1@finguard.internal\",\n  \"password\": \"Analyst@Pass123\",\n  \"fullName\": \"Senior Fraud Analyst\",\n  \"role\": \"ANALYST\"\n}"
             },
             "url": {
-              "raw": "{{gateway_url}}/api/auth/register",
+              "raw": "{{gateway_url}}/api/v1/auth/register",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "auth", "register"]
+              "path": ["api", "v1", "auth", "register"]
             }
           }
         },
@@ -82,9 +82,9 @@
               "raw": "{\n  \"email\": \"analyst1@finguard.internal\",\n  \"password\": \"Analyst@Pass123\"\n}"
             },
             "url": {
-              "raw": "{{gateway_url}}/api/auth/login",
+              "raw": "{{gateway_url}}/api/v1/auth/login",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "auth", "login"]
+              "path": ["api", "v1", "auth", "login"]
             }
           }
         }
@@ -118,9 +118,9 @@
               "raw": "{\n  \"sourceAccountNumber\": \"ACC-1001\",\n  \"targetAccountNumber\": \"ACC-1002\",\n  \"amount\": 45.50,\n  \"currency\": \"USD\",\n  \"merchantCategory\": \"GROCERY\",\n  \"location\": \"New York, USA\",\n  \"channel\": \"POS\",\n  \"idempotencyKey\": \"idemp-grocery-{{$timestamp}}\"\n}"
             },
             "url": {
-              "raw": "{{gateway_url}}/api/transactions",
+              "raw": "{{gateway_url}}/api/v1/transactions",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "transactions"]
+              "path": ["api", "v1", "transactions"]
             }
           }
         },
@@ -163,9 +163,9 @@
               "raw": "{\n  \"sourceAccountNumber\": \"ACC-1001\",\n  \"targetAccountNumber\": \"ACC-9921\",\n  \"amount\": 25000.00,\n  \"currency\": \"USD\",\n  \"merchantCategory\": \"LUXURY_GOODS\",\n  \"location\": \"Dubai, UAE\",\n  \"channel\": \"ONLINE\",\n  \"idempotencyKey\": \"idemp-highval-{{$timestamp}}\"\n}"
             },
             "url": {
-              "raw": "{{gateway_url}}/api/transactions",
+              "raw": "{{gateway_url}}/api/v1/transactions",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "transactions"]
+              "path": ["api", "v1", "transactions"]
             }
           }
         },
@@ -184,9 +184,9 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/transactions?page=0&size=20",
+              "raw": "{{gateway_url}}/api/v1/transactions?page=0&size=20",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "transactions"],
+              "path": ["api", "v1", "transactions"],
               "query": [
                 { "key": "page", "value": "0" },
                 { "key": "size", "value": "20" }
@@ -209,9 +209,9 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/transactions/accounts",
+              "raw": "{{gateway_url}}/api/v1/transactions/accounts",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "transactions", "accounts"]
+              "path": ["api", "v1", "transactions", "accounts"]
             }
           }
         }
@@ -235,9 +235,9 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/fraud/assessments?size=20",
+              "raw": "{{gateway_url}}/api/v1/fraud/assessments?size=20",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "fraud", "assessments"],
+              "path": ["api", "v1", "fraud", "assessments"],
               "query": [
                 { "key": "size", "value": "20" }
               ]
@@ -259,9 +259,9 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/fraud/rules",
+              "raw": "{{gateway_url}}/api/v1/fraud/rules",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "fraud", "rules"]
+              "path": ["api", "v1", "fraud", "rules"]
             }
           }
         }
@@ -299,9 +299,9 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/incidents?page=0&size=10",
+              "raw": "{{gateway_url}}/api/v1/incidents?page=0&size=10",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "incidents"],
+              "path": ["api", "v1", "incidents"],
               "query": [
                 { "key": "page", "value": "0" },
                 { "key": "size", "value": "10" }
@@ -322,7 +322,7 @@
                 }
               ]
             },
-            "method": "PATCH",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -331,12 +331,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"UNDER_INVESTIGATION\",\n  \"analystNotes\": \"Investigating foreign login and sudden high transaction amount burst.\"\n}"
+              "raw": "{\n  \"status\": \"UNDER_INVESTIGATION\",\n  \"notes\": \"Investigating foreign login and sudden high transaction amount burst.\"\n}"
             },
             "url": {
-              "raw": "{{gateway_url}}/api/incidents/{{last_incident_id}}/status",
+              "raw": "{{gateway_url}}/api/v1/incidents/{{last_incident_id}}/status",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "incidents", "{{last_incident_id}}", "status"]
+              "path": ["api", "v1", "incidents", "{{last_incident_id}}", "status"]
             }
           }
         }
@@ -370,9 +370,9 @@
               "raw": "{\n  \"transactionId\": \"tx-sample-01\",\n  \"transactionReference\": \"{{last_tx_ref}}\",\n  \"accountNumber\": \"ACC-1001\",\n  \"amount\": 25000.00,\n  \"currency\": \"USD\",\n  \"riskScore\": 85,\n  \"riskLevel\": \"CRITICAL\",\n  \"location\": \"Dubai, UAE\",\n  \"triggeredRules\": [\n    {\n      \"ruleType\": \"HIGH_AMOUNT\",\n      \"ruleName\": \"High Transaction Amount Threshold\",\n      \"scoreWeight\": 25,\n      \"description\": \"Amount $25,000 exceeds standard limit $10,000\"\n    },\n    {\n      \"ruleType\": \"UNUSUAL_LOCATION\",\n      \"ruleName\": \"Geographic Anomaly\",\n      \"scoreWeight\": 20,\n      \"description\": \"Dubai differs from customer primary baseline\"\n    }\n  ]\n}"
             },
             "url": {
-              "raw": "{{gateway_url}}/api/ai/explain",
+              "raw": "{{gateway_url}}/api/v1/ai/explain",
               "host": ["{{gateway_url}}"],
-              "path": ["api", "ai", "explain"]
+              "path": ["api", "v1", "ai", "explain"]
             }
           }
         }

@@ -90,7 +90,7 @@ const FraudRulesManagement = () => {
     setStatusMsg('');
     try {
       await api.put(`/fraud/rules/${rule.id}`, rule);
-      setStatusMsg(`Rule "${rule.name}" updated successfully in database and Redis cache!`);
+      setStatusMsg(`Rule "${rule.name}" updated successfully in database!`);
     } catch (err) {
       console.warn('Save failed on backend, cached locally:', err);
       setStatusMsg(`Rule "${rule.name}" saved to memory cache.`);
@@ -111,7 +111,7 @@ const FraudRulesManagement = () => {
             Fraud Rules Engine Configuration
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Dynamic rule weights and thresholds with Redis write-through caching.
+            Configure dynamic rule weights and thresholds.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -154,12 +154,12 @@ const FraudRulesManagement = () => {
         </div>
         <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
           <div>
-            <div className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Redis Cache Tier</div>
-            <div className="text-sm font-bold text-emerald-400 mt-1 flex items-center gap-1.5">
+            <div className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Storage Tier</div>
+            <div className="text-sm font-bold text-slate-200 mt-1 flex items-center gap-1.5">
               <Database className="w-4 h-4" />
-              HOT CACHED (60m TTL)
+              PostgreSQL Ledger
             </div>
-            <div className="text-xs text-slate-400 mt-1">Auto-evicted upon update</div>
+            <div className="text-xs text-slate-400 mt-1">Direct database persistence</div>
           </div>
         </div>
       </div>
