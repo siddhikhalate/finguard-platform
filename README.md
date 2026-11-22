@@ -25,33 +25,48 @@ UI demo at https://finguard-platform.vercel.app/ runs on built-in sample data (d
 
 ```mermaid
 flowchart TD
-    Client["Client / React Operations Dashboard"] -->|HTTPS / REST| Gateway["API Gateway (Port 8080)<br/>Spring Cloud Gateway + Netty"]
-    
-    subgraph SecurityRouting ["Security and Routing Tier"]
-        Gateway -->|JWT Validation and Routing| AuthSvc["Auth Service (Port 8081)<br/>JJWT + BCrypt + Roles"]
-        Gateway -->|Route /api/v1/transactions| TxSvc["Transaction Service (Port 8082)<br/>Transactional Outbox"]
-        Gateway -->|Route /api/v1/fraud| FraudSvc["Fraud Detection Service (Port 8083)<br/>Rules Engine + Redis"]
-        Gateway -->|Route /api/v1/incidents| IncSvc["Incident Service (Port 8084)<br/>Triage & Audit Trail"]
-        Gateway -->|Route /api/v1/ai| AiSvc["AI Explanation Service (Port 8085)<br/>Spring AI + Fallback"]
+    Client["Client / React Operations Dashboard"] -->|HTTPS / REST| Gateway["API Gateway (Port 8080)"]
+
+    subgraph SecurityRouting [Security and Routing Tier]
+        AuthSvc["Auth Service (Port 8081)"]
+        TxSvc["Transaction Service (Port 8082)"]
+        FraudSvc["Fraud Detection Service (Port 8083)"]
+        IncSvc["Incident Service (Port 8084)"]
+        AiSvc["AI Explanation Service (Port 8085)"]
     end
 
-    subgraph StorageCaching ["Storage and Caching Tier"]
-        AuthSvc --> AuthDB[("Postgres: auth_db")]
-        TxSvc --> TxDB[("Postgres: txn_db")]
-        FraudSvc --> FraudDB[("Postgres: fraud_db")]
-        FraudSvc --> RedisCache[("Redis 7.2: Sliding-window velocity")]
-        IncSvc --> IncDB[("Postgres: incident_db")]
-        AiSvc --> AiMemory[("In-Memory State Map")]
+    subgraph StorageCaching [Storage Tier]
+        AuthDB[("Postgres: auth_db")]
+        TxDB[("Postgres: txn_db")]
+        FraudDB[("Postgres: fraud_db")]
+        RedisCache[("Redis 7.2: Velocity")]
+        IncDB[("Postgres: incident_db")]
+        AiMemory[("In-Memory State Map")]
     end
 
-    subgraph KafkaEventBus ["Kafka Event Bus - KRaft Mode"]
-        TxSvc -.->|finguard.transaction-created| Kafka["Apache Kafka Broker"]
-        Kafka -.->|Consume Event| FraudSvc
-        FraudSvc -.->|finguard.fraud-risk-assessed| Kafka
-        Kafka -.->|High Risk Score| IncSvc
-        IncSvc -.->|finguard.fraud-incident-created| Kafka
-        Kafka -.->|Synthesize Context| AiSvc
+    subgraph KafkaEventBus [Kafka Event Bus - KRaft Mode]
+        Kafka["Apache Kafka Broker"]
     end
+
+    Gateway -->|JWT Validation and Routing| AuthSvc
+    Gateway -->|Route /api/v1/transactions| TxSvc
+    Gateway -->|Route /api/v1/fraud| FraudSvc
+    Gateway -->|Route /api/v1/incidents| IncSvc
+    Gateway -->|Route /api/v1/ai| AiSvc
+
+    AuthSvc --> AuthDB
+    TxSvc --> TxDB
+    FraudSvc --> FraudDB
+    FraudSvc --> RedisCache
+    IncSvc --> IncDB
+    AiSvc --> AiMemory
+
+    TxSvc -.->|finguard.transaction-created| Kafka
+    Kafka -.->|Consume Event| FraudSvc
+    FraudSvc -.->|finguard.fraud-risk-assessed| Kafka
+    Kafka -.->|High Risk Score| IncSvc
+    IncSvc -.->|finguard.fraud-incident-created| Kafka
+    Kafka -.->|Synthesize Context| AiSvc
 ```
 
 ---
