@@ -59,7 +59,7 @@ public class AuthService {
     @Value("${finguard.security.jwt.refresh-token-expiration-ms:604800000}")
     private long refreshTokenExpirationMs;
 
-    @Transactional
+    @Transactional(noRollbackFor = AuthException.class)
     public AuthResponse login(LoginRequest loginRequest) {
         String username = loginRequest.getUsername().trim().toLowerCase();
         Optional<User> userOpt = userRepository.findByUsername(username);
