@@ -191,9 +191,8 @@ public class AuthService {
         String requestRefreshToken = request.getRefreshToken();
         String tokenHash = hashToken(requestRefreshToken);
 
-        // Verify token against database hash lookup (with fallback to plaintext token for backwards compatibility)
+        // Verify token strictly against database hash lookup (no plaintext fallback)
         return refreshTokenRepository.findByTokenHash(tokenHash)
-                .or(() -> refreshTokenRepository.findByToken(requestRefreshToken))
                 .map(this::verifyExpiration)
                 .map(RefreshToken::getUser)
                 .map(user -> {
@@ -206,7 +205,7 @@ public class AuthService {
                             .expiresIn(tokenProvider.getExpirationMs() / 1000)
                             .build();
                 })
-                .orElseThrow(() -> new TokenRefreshException(requestRefreshToken, "Refresh token not found in database"));
+                .orElseThrow(() -> new TokenRefreshException(tokenHash, "Refresh token not found in database"));
     }
 
     @Transactional(readOnly = true)
@@ -241,7 +240,6 @@ public class AuthService {
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)
-                .token(rawToken)
                 .tokenHash(tokenHash)
                 .expiryDate(Instant.now().plusMillis(refreshTokenExpirationMs))
                 .revoked(false)
@@ -252,12 +250,12 @@ public class AuthService {
 
     private RefreshToken verifyExpiration(RefreshToken token) {
         if (token.isRevoked()) {
-            throw new TokenRefreshException(token.getToken(), "Refresh token was revoked");
+            throw new TokenRefreshException(token.getTokenHash(), "Refresh token was revoked");
         }
 
         if (token.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepository.delete(token);
-            throw new TokenRefreshException(token.getToken(), "Refresh token has expired. Please log in again.");
+            throw new TokenRefreshException(token.getTokenHash(), "Refresh token has expired. Please log in again.");
         }
 
         return token;

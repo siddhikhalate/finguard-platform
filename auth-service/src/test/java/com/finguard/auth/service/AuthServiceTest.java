@@ -3,6 +3,8 @@ package com.finguard.auth.service;
 import com.finguard.auth.dto.AuthResponse;
 import com.finguard.auth.dto.LoginRequest;
 import com.finguard.auth.dto.RegisterRequest;
+import com.finguard.auth.dto.TokenRefreshRequest;
+import com.finguard.auth.dto.TokenRefreshResponse;
 import com.finguard.auth.entity.RefreshToken;
 import com.finguard.auth.entity.Role;
 import com.finguard.auth.entity.User;
@@ -159,12 +161,12 @@ class AuthServiceTest {
                 .password("ValidPassword")
                 .build();
 
-        authService.login(request);
+        AuthResponse response = authService.login(request);
 
         RefreshToken savedToken = captor.getValue();
         assertNotNull(savedToken.getTokenHash());
         assertEquals(64, savedToken.getTokenHash().length());
-        assertEquals(AuthService.hashToken(savedToken.getToken()), savedToken.getTokenHash());
+        assertEquals(AuthService.hashToken(response.getRefreshToken()), savedToken.getTokenHash());
     }
 
     @Test
@@ -209,7 +211,7 @@ class AuthServiceTest {
         when(tokenProvider.getExpirationMs()).thenReturn(86400000L);
         when(refreshTokenRepository.save(any())).thenReturn(RefreshToken.builder()
                 .id(UUID.randomUUID())
-                .token("refresh_abc")
+                .tokenHash("hash_abc")
                 .expiryDate(Instant.now().plusMillis(604800000))
                 .build());
 
@@ -268,5 +270,38 @@ class AuthServiceTest {
 
         assertThrows(AuthException.class, () -> authService.updateUserRoles(userId, Set.of()));
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should refresh access token successfully using token hash lookup")
+    void shouldRefreshTokenSuccessfullyUsingTokenHash() {
+        String rawToken = "raw-refresh-token-12345";
+        String tokenHash = AuthService.hashToken(rawToken);
+        UUID userId = UUID.randomUUID();
+
+        User user = User.builder()
+                .id(userId)
+                .username("refresh_user")
+                .roles(Set.of())
+                .build();
+
+        RefreshToken refreshToken = RefreshToken.builder()
+                .id(UUID.randomUUID())
+                .tokenHash(tokenHash)
+                .user(user)
+                .expiryDate(Instant.now().plusSeconds(3600))
+                .revoked(false)
+                .build();
+
+        when(refreshTokenRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(refreshToken));
+        when(tokenProvider.generateAccessToken(any())).thenReturn("new.access.token");
+        when(tokenProvider.getExpirationMs()).thenReturn(3600000L);
+
+        TokenRefreshResponse response = authService.refreshToken(new TokenRefreshRequest(rawToken));
+
+        assertNotNull(response);
+        assertEquals("new.access.token", response.getAccessToken());
+        assertEquals(rawToken, response.getRefreshToken());
+        verify(refreshTokenRepository).findByTokenHash(tokenHash);
     }
 }
