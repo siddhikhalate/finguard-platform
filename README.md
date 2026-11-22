@@ -5,7 +5,7 @@
 [![Spring Cloud Gateway](https://img.shields.io/badge/Spring%20Cloud-2023.0.3-blue.svg)](https://spring.io/projects/spring-cloud)
 [![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft%20Mode-black.svg?logo=apachekafka)](https://kafka.apache.org/)
 [![Redis](https://img.shields.io/badge/Redis-7.2-red.svg?logo=redis)](https://redis.io/)
-[![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0.0--M2-purple.svg)](https://spring.io/projects/spring-ai)
+[![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0.0--M3-purple.svg)](https://spring.io/projects/spring-ai)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg?logo=postgresql)](https://www.postgresql.org/)
 [![React](https://img.shields.io/badge/React-18%20Vite%20%2B%20Tailwind-cyan.svg?logo=react)](https://react.dev/)
 [![CI Pipeline](https://github.com/siddhikhalate/finguard-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/siddhikhalate/finguard-platform/actions/workflows/ci.yml)
@@ -129,7 +129,7 @@ FinGuard follows the **Assistive AI Principle**: Automated financial or legal ve
 
 | Strategy | Rule Key | Default Weight | Trigger Condition |
 | :--- | :--- | :---: | :--- |
-| **High Amount** | `HIGH_AMOUNT` | **+25** | Transaction amount $\ge$ configured threshold (Default: `$10,000.00`). |
+| **High Amount** | `HIGH_AMOUNT` | **+25** | Transaction amount $>$ configured threshold (Default: `$10,000.00`). |
 | **Rapid Activity** | `RAPID_ACTIVITY` | **+25** | Redis sliding window detects $> 3$ transactions (4 or more) within a 120-second rolling window for the same account (default threshold: 3, window: 120s). |
 | **Unusual Location** | `UNUSUAL_LOCATION` | **+20** | Transaction location matches a hardcoded set of synthetic high-risk location keywords (`LAGOS, NIGERIA`, `CAYMAN ISLANDS`, `UNKNOWN PROXY`, `TOR EXIT NODE`, `OFFSHORE HAVEN`). |
 | **Repeated Failures** | `REPEATED_FAILURES` | **+15** | Flags transactions with status `FAILED` (e.g. insufficient balance) when rolling failures $\ge 1$ within a 300-second window (default threshold: 1, window: 300s). |
@@ -231,31 +231,38 @@ Execute the test suite across all services:
 *Result: 46 automated unit tests execute successfully.*
 
 ### 4. Run Backend Services
+Build application packages:
+```bash
+# On Windows PowerShell:
+.\mvnw.cmd clean package -DskipTests
+
+# On Linux/macOS:
+./mvnw clean package -DskipTests
+```
+
 You can run services individually from your IDE or via terminal:
 ```bash
 # 1. API Gateway (Port 8080)
-java -jar services/api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar
+java -jar api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar
 
 # 2. Auth Service (Port 8081)
-java -jar services/auth-service/target/auth-service-1.0.0-SNAPSHOT.jar
+java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar
 
 # 3. Transaction Service (Port 8082)
-java -jar services/transaction-service/target/transaction-service-1.0.0-SNAPSHOT.jar
+java -jar transaction-service/target/transaction-service-1.0.0-SNAPSHOT.jar
 
 # 4. Fraud Detection Service (Port 8083)
-java -jar services/fraud-detection-service/target/fraud-detection-service-1.0.0-SNAPSHOT.jar
+java -jar fraud-detection-service/target/fraud-detection-service-1.0.0-SNAPSHOT.jar
 
 # 5. Incident Management Service (Port 8084)
-java -jar services/incident-service/target/incident-service-1.0.0-SNAPSHOT.jar
+java -jar incident-service/target/incident-service-1.0.0-SNAPSHOT.jar
 
 # 6. AI Explanation Service (Port 8085)
-java -jar services/ai-explanation-service/target/ai-explanation-service-1.0.0-SNAPSHOT.jar
+java -jar ai-explanation-service/target/ai-explanation-service-1.0.0-SNAPSHOT.jar
 ```
 
-*Or launch the entire stack in Docker:*
-```bash
-docker compose --profile apps up -d
-```
+*Docker Note:*
+Docker image builds for the application services are being fixed; run the services from the jars above.
 
 ### 5. Launch React Dashboard
 ```bash
@@ -270,7 +277,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 - **Analyst:** `dev_analyst` / `DevAnalyst@123`
 - **Standard User:** `dev_user` / `DevUser@123`
 
-> **Note on Environment Scope:** These pre-seeded dev accounts are created exclusively when running with the `dev` profile (`SPRING_PROFILES_ACTIVE=dev`, active by default for local Docker development) via `DevDataInitializer`. They exist solely for local development and testing. In non-dev profiles, no default credentials are created and accounts register via `/api/v1/auth/register`.
+> **Note on Environment Scope:** These pre-seeded dev accounts are created exclusively when running with the `dev` profile (run the services with SPRING_PROFILES_ACTIVE=dev to create them) via `DevDataInitializer`. They exist solely for local development and testing. In non-dev profiles, no default credentials are created and accounts register via `/api/v1/auth/register`.
 
 ---
 
@@ -318,12 +325,13 @@ The test suite consists of **46 unit tests** built with **JUnit 5** and **Mockit
 - **API Gateway Perimeter Enforcement:** `JwtAuthenticationFilter` validates incoming JWTs, enforces the role matrix (`ROLE_USER`, `ROLE_ANALYST`, `ROLE_ADMIN`), strips spoofable client headers (`X-User-*`), and attaches a shared `X-Internal-Gateway-Key`.
 - **Microservice Isolation:** Downstream services verify the internal gateway key in constant time via `MessageDigest.isEqual(...)` before processing requests, preventing perimeter bypass.
 - **Object-Level Access Control:** `transaction-service` enforces account ownership so users with `ROLE_USER` can only access accounts tied to their `userId`, while compliance analysts and admins retain cross-account audit access.
-- **Authentication & Credential Hardening:** Passwords hashed with BCrypt. Temporary 15-minute account lockout after 5 consecutive failed login attempts. Refresh tokens are hashed with SHA-256 before database storage.
+- **Authentication & Credential Hardening:** Passwords hashed with BCrypt; JWTs validated at the gateway. Login lockout and refresh-token hashing are work in progress (see Known Limitations).
 
 ---
 
 ## ⚠️ Known Limitations
 
+- **Auth Hardening In Progress:** The failed-login lockout counter and refresh-token hashing are not yet fully reliable; refresh tokens are still stored alongside their hash.
 - **Outbox Scope:** Implemented only in `transaction-service`. Downstream services (`fraud-detection-service`, `incident-service`) publish directly to Kafka via `KafkaTemplate`.
 - **No Dead-Letter Topics (DLT):** Unprocessable Kafka messages or consumer exceptions do not route to a dead-letter queue.
 - **Unit Tests Only:** Test coverage consists of unit tests (JUnit 5 + Mockito); no integration tests using Testcontainers or embedded Kafka are currently present.
